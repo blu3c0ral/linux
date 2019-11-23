@@ -15,6 +15,7 @@ resolve_dependencies64(Elf64_DynEx * dyn_entries[], size_t dyne_size, char is_su
 {
     Resolver_Data *resolver_data;
     size_t nleft;   /*  How much .so's left to find  */
+    size_t i;
 
     /*  Gather the data needed  */
     resolver_data = get_resolver_data(dyn_entries, dyne_size, is_suid_sgid);
@@ -40,7 +41,7 @@ resolve_dependencies64(Elf64_DynEx * dyn_entries[], size_t dyne_size, char is_su
     }
 
     /*
-    *   (ELF only) Using the directories specified in the DT_RUNPATH dynamic section attribute of the binary if present. 
+    *   If DT_RUNPATH exist - search it
     */
     if ((resolver_data->dt_runpath!=NULL) && (nleft > 0))
     {
@@ -54,6 +55,16 @@ resolve_dependencies64(Elf64_DynEx * dyn_entries[], size_t dyne_size, char is_su
     {
         nleft -= search_ldcache(resolver_data->ndd_sos));
     }
+
+    /*
+    *   Searching /lib and /usr/lib
+    */
+    if (nleft > 0)
+    {
+        nleft -= search_files_in_dirs({"/lib", "/usr/lib"}, 2, resolver_data->ndd_sos);
+    }
+
+
 }
 
 
@@ -146,12 +157,7 @@ parse_delim_str(char *path_str, size_t *size)
         }
         ++tmp_char;
     }
-    result_strings = (char **) malloc((count+1) * sizeof(char *));
-    if (!result_strings)
-    {
-        fprintf(stderr,"cannot allocate memory for %s in %s\n", "result_strings", "parse_delim_str");
-        return NULL;
-    }
+    MALLOC(result_strings, count+1);
     count = 0;
     while (done == 0)
     {
@@ -164,12 +170,7 @@ parse_delim_str(char *path_str, size_t *size)
         {
             done = 1;
         }
-        result_strings[count] = (char *) malloc(rind-lind+1);
-        if (!result_strings)
-        {
-            fprintf(stderr,"cannot allocate memory for %s in %s\n", "result_strings", "parse_delim_str");
-            return NULL;
-        }
+        MALLOC(result_strings[count], rind-lind+1);
         for (i = lind; i <rind; ++i)
         {
             result_strings[count][i-lind] = path_str[i];
@@ -200,12 +201,7 @@ concatenate_dir_filedir(char *dir, char *filename)
     {
         fp_size = dir_size + fname_size + 2;
     }
-    file_path = (char *) malloc(fp_size);
-    if (!file_path)
-    {
-        fprintf(stderr,"cannot allocate memory for %s in %s\n", "file_path", "concatenate_dir_file");
-        return NULL;
-    }
+    MALLOC(file_path, fp_size);
     strcpy(file_path, dir);
     if (dir[dir_size-1] != '/')
     {
@@ -241,7 +237,7 @@ search_file_in_dir(char *dir, char *filename)
             }
             tmp_dir = concatenate_dir_filedir(dir, de->d_name);
             tmp_filepath = search_file_in_dir(tmp_dir, filename);
-            free(tmp_dir);
+            FREE(tmp_dir);
             if (tmp_filepath)
             {
                 closedir(dr);
@@ -304,6 +300,7 @@ file_size(int fd)
     TODO: 
         * Look for more than one appearance of each library. Handle it by priority, if there's any
         * Handle the hardware capability directories priority
+        * Deal with linker flag -z nodeflib
 */
 size_t
 search_ldcache(NeededStringChart *ndd_chart)
