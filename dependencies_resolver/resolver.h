@@ -18,63 +18,39 @@ typedef struct {
     size_t  pre_size;
 } RD_Env;
 
+typedef struct {
+    char * ndd_str;
+    char * fpath;
+} NeededString;
+
+typedef struct {
+    NeededString ** ndd_str_arr;
+    
+    size_t nsa_size;    /*  I know...   */
+} NeededStringChart;
+
 /*  Should contain everything needed for the so lookup  */
 typedef struct
 {
-    char ** dependencies_strings;
+    NeededStringChart * ndd_sos;
+
     char ** dt_rpath;
     char ** dt_runpath;
 
-    size_t  dep_str_size;
     size_t  rpath_size;
     size_t  runpath_size;
 
     RD_Env *env;
+
+    char is_suid_sgid;
 } Resolver_Data;
 
 
-
-#define MAX_STACK_SIZE 1000
-#define s_init(arr_stack) \
-    { \
-        for(size_t i = 0; i < MAX_STACK_SIZE; ++ i) \
-        { \
-            (arr_stack)[i] = NULL; \
-        } \
-    }
-#define pop(arr_stack, count) \
-    { \
-        if ((count) == 0) \
-        { \
-            fprintf(stderr,"stack is empty\n"); \
-        } \
-        else \
-        { \
-            for(size_t i=0; i < (count); ++i) \
-            { \
-                (arr_stack)[i] = (arr_stack)[i+1]; \
-            } \
-            (arr_stack)[(count)-1] = NULL; \
-            --(count); \
-        } \
-    }
-#define push(arr_stack, de, count) \
-    { \
-        if ((count) == MAX_STACK_SIZE) \
-        { \
-            fprintf(stderr,"cannot push more items\n"); \
-        } \
-        else \
-        { \
-            (arr_stack)[(count)++] = de; \
-        } \
-    }
 
 /*  Basically gcc will add the next file types defines with this macro defined */
 /*
 #define _BSD_SOURCE
 */
-
 
 /*
  * File types
@@ -91,13 +67,26 @@ typedef struct
 */
 
 
+/*  ld.cache file location  */
+#define LDCACHE_FILE "/etc/ld.so.cache"
+#define _GNU_SOURCE
+
+
+
+/*  Return NULL for failing malloc  */
+#define malloc_rnull(size) \
+malloc((size)); \
+
+
+
+
 int
-resolve_dependencies64(Elf64_DynEx * dyn_entries[], size_t dyne_size);
+resolve_dependencies64(Elf64_DynEx * dyn_entries[], size_t dyne_size, char is_suid_sgid);
 
 
 
 Resolver_Data *
-get_resolver_data(Elf64_DynEx * dyn_entries[], size_t dyne_size);
+get_resolver_data(Elf64_DynEx * dyn_entries[], size_t dyne_size, char is_suid_sgid);
 
 
 
@@ -107,4 +96,19 @@ parse_delim_str(char *path_str, size_t *size);
 
 
 char *
+concatenate_dir_filedir(char *dir, char *filename);
+
+
+
+char *
 search_file_in_dir(char *dir, char *filename);
+
+
+
+size_t
+search_files_in_dirs(char **dirs, size_t dirs_num, NeededStringChart *ndd_chart);
+
+
+
+char *
+search_ldcache(NeededStringChart *ndd_chart);

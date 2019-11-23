@@ -3,27 +3,59 @@
 #include <string.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <features.h>
+
 
 #include "resolver.h"
 
 int
-resolve_dependencies64(Elf64_DynEx * dyn_entries[], size_t dyne_size)
+resolve_dependencies64(Elf64_DynEx * dyn_entries[], size_t dyne_size, char is_suid_sgid)
 {
     Resolver_Data *resolver_data;
+    size_t nleft;   /*  How much .so's left to find  */
 
-    resolver_data = get_resolver_data(dyn_entries, dyne_size);
+    /*  Gather the data needed  */
+    resolver_data = get_resolver_data(dyn_entries, dyne_size, is_suid_sgid);
+    nleft = resolver_data->ndd_sos->nsa_size;
 
+    /*
+    *   Using the directories specified in the DT_RPATH dynamic section attribute of the binary if present 
+    *   and DT_RUNPATH attribute does not exist.
+    *   Use of DT_RPATH is deprecated.
+    */
+    if((resolver_data->dt_rpath!=NULL) && (resolver_data->dt_runpath==NULL))
+    {
+        nleft -= search_files_in_dirs(resolver_data->dt_rpath, resolver_data->rpath_size, resolver_data->ndd_sos); 
+    }
 
+    /*
+    *   Using the environment variable LD_LIBRARY_PATH. Except if the executable is a set-user-ID/set-group-ID binary, 
+    *   in which case it is ignored.
+    */
+    if ((resolver_data->env->ld_library_path != NULL) && (resolver_data->is_suid_sgid == 0) && (nleft > 0))
+    {
+        nleft -= search_files_in_dirs(resolver_data->env->ld_library_path, resolver_data->rpath_size, resolver_data->ndd_sos);
+    }
+
+    /*
+    *   (ELF only) Using the directories specified in the DT_RUNPATH dynamic section attribute of the binary if present. 
+    */
+    if ((resolver_data->dt_runpath!=NULL) && (nleft > 0))
+    {
+        nleft -= search_files_in_dirs(resolver_data->dt_runpath, resolver_data->rpath_size, resolver_data->ndd_sos);
+    }
 }
 
 
 Resolver_Data *
-get_resolver_data(Elf64_DynEx * dyn_entries[], size_t dyne_size)
+get_resolver_data(Elf64_DynEx * dyn_entries[], size_t dyne_size, char is_suid_sgid)
 {
     size_t i;
-    size_t res_ind = -1;
+    size_t res_ind = 0;
     size_t str_len;
-    char **res_string = NULL;
+    NeededString **ndd_strs = NULL;
     Resolver_Data *res_data;
 
     res_data = (Resolver_Data *) malloc(sizeof(Resolver_Data));
@@ -37,10 +69,10 @@ get_resolver_data(Elf64_DynEx * dyn_entries[], size_t dyne_size)
     res_data->dt_rpath = NULL;
     res_data->dt_runpath = NULL;
 
-    res_string = (char **) malloc(dyne_size * sizeof(char *));
-    if (res_string == NULL)
+    ndd_strs = (NeededString **) malloc(dyne_size * sizeof(NeededString *));
+    if (ndd_strs == NULL)
     {
-        fprintf(stderr,"cannot allocate memory for %s in %s\n", "res_string", "get_resolver_data");
+        fprintf(stderr,"cannot allocate memory for %s in %s\n", "ndd_strs[]", "get_resolver_data");
         return NULL;
     }
 
@@ -50,15 +82,22 @@ get_resolver_data(Elf64_DynEx * dyn_entries[], size_t dyne_size)
         switch (dyn_entries[i]->elf64_dyn->d_tag)
         {
         case DT_NEEDED:
-            ++res_ind;
             str_len = strlen(dyn_entries[i]->string);
-            res_string[res_ind] = (char *) malloc(str_len + 1);
-            if (res_string == NULL)
+            ndd_strs[res_ind] = (NeededString *) malloc(sizeof(NeededString));
+            if (ndd_strs[res_ind] == NULL)
             {
-                fprintf(stderr,"cannot reallocate memory for %s in %s\n", "res_string", "get_resolver_data");
+                fprintf(stderr,"cannot reallocate memory for %s in %s\n", "ndd_strs", "get_resolver_data");
                 return NULL;
             }
-            memcpy(res_string[res_ind], dyn_entries[i]->string, str_len + 1);
+            ndd_strs[res_ind]->ndd_str = (char *) malloc(str_len + 1);
+            if (ndd_strs[res_ind]->ndd_str == NULL)
+            {
+                fprintf(stderr,"cannot reallocate memory for %s in %s\n", "ndd_strs->ndd_str", "get_resolver_data");
+                return NULL;
+            }
+            memcpy(ndd_strs[res_ind]->ndd_str, dyn_entries[i]->string, str_len + 1);
+            ndd_strs[res_ind]->fpath = NULL;
+            ++res_ind;
             break;
 
         case DT_RPATH:
@@ -73,19 +112,28 @@ get_resolver_data(Elf64_DynEx * dyn_entries[], size_t dyne_size)
             break;
         }
     }
-
-    res_string = (char **) realloc(res_string, res_ind * sizeof(char *));
-    if (res_string == NULL)
+    ++res_ind;
+    ndd_strs = (NeededString **) realloc(ndd_strs, res_ind * sizeof(NeededString *));
+    if (ndd_strs == NULL)
     {
-        fprintf(stderr,"cannot reallocate memory for %s in %s\n", "res_string", "get_resolver_data");
+        fprintf(stderr,"cannot reallocate memory for %s in %s\n", "ndd_strs", "get_resolver_data");
         return NULL;
     }
-    res_data->dependencies_strings = res_string;
-    res_data->dep_str_size = res_ind;
+    res_data->ndd_sos = (NeededStringChart *) malloc(sizeof(NeededStringChart));
+    if (ndd_strs == NULL)
+    {
+        fprintf(stderr,"cannot allocate memory for %s in %s\n", "ndd_sos", "get_resolver_data");
+        return NULL;
+    }
+    res_data->ndd_sos->ndd_str_arr = ndd_strs;
+    res_data->ndd_sos->nsa_size = res_ind;
 
     /*  Set environment variables string    */
     res_data->env->ld_library_path = parse_delim_str(getenv("LD_LIBRARY_PATH"), &res_data->env->lib_size);
     res_data->env->ld_preload = parse_delim_str(getenv("LD_PRELOAD"), &res_data->env->pre_size);
+
+    /*  Is setUID or setGID */
+    res_data->is_suid_sgid = is_suid_sgid;
 
     return res_data;
 }
@@ -218,7 +266,7 @@ search_file_in_dir(char *dir, char *filename)
             free(tmp_dir);
             if (tmp_filepath)
             {
-                closedir(dir);
+                closedir(dr);
                 return tmp_filepath;
             }
         }
@@ -226,13 +274,86 @@ search_file_in_dir(char *dir, char *filename)
         {
             if (strcmp(de->d_name, filename) == 0)
             {
-                closedir(dir);
+                closedir(dr);
                 return concatenate_dir_filedir(dir, filename);
             }
         }
         
     }
-    closedir(dir);
+    closedir(dr);
     return NULL;
     
+}
+
+
+size_t
+search_files_in_dirs(char **dirs, size_t dirs_num, NeededStringChart *ndd_chart)
+{
+    size_t found_count = 0;
+    size_t i, j;
+
+    for(i = 0; i < ndd_chart->nsa_size; ++i)
+    {
+        for(j = 0; (j < dirs_num) && (ndd_chart->ndd_str_arr[i]->fpath == NULL); ++j)
+        {
+            if (ndd_chart->ndd_str_arr[i]->fpath = search_file_in_dir(dirs[j], ndd_chart->ndd_str_arr[i]->ndd_str))
+            {
+                ++found_count;
+            }
+        }
+    }
+
+    return found_count;
+}
+
+
+
+long
+file_size(int fd)
+{
+    __off_t size = 0;
+    size = lseek(fd, 0, SEEK_END);
+    if (size == -1) {
+        return -1;
+    }
+    lseek(fd, 0, SEEK_SET);
+    return (long)size;
+}
+
+
+
+char *
+search_ldcache(NeededStringChart *ndd_chart)
+{
+    int fd;
+    int OFLAGS = O_RDONLY;
+    char *file_ptr;
+    char *fpath;
+    char *tmp_path;
+    long fsize;
+    size_t i;
+    size_t tmp_len;
+
+    fd  = open(LDCACHE_FILE, OFLAGS);
+
+    fsize = file_size(fd);
+    if (fsize == -1) 
+    {
+        fprintf("ERROR: %s size couldn't retrieved", LDCACHE_FILE);
+        return NULL;
+    }
+
+    file_ptr = (char *)mmap(NULL, fsize, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (file_ptr == NULL) 
+    {
+        fprintf("ERROR: %s couldn't be mapped to memory", LDCACHE_FILE);
+        return NULL;
+    }
+
+    for(i = 0; i < ndd_chart->nsa_size; ++i)
+    {
+        tmp_len = strlen(ndd_chart->ndd_str_arr[i]);
+        tmp_path = (char *) malloc()
+        fpath = (char *) memmem(file_ptr, fsize, tmp_path, tmp_len);
+    }
 }

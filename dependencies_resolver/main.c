@@ -65,6 +65,8 @@ int main()
     //printf("Directory scan of /home:\n");
     //printdir("/home",0);
     //printf("done.\n");
-    printf("%s", search_file_in_dir("/home", "main.c"));
+    char *result;
+    printf("%s\n", ((result=search_file_in_dir("/home", "resolver.c"))==NULL)?"":result);
+    free(result);
     exit(0);
 }
