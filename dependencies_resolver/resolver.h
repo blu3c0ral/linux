@@ -2,6 +2,8 @@
 
 #include <elf.h>
 
+#include "memory.h"
+
 /*  Elf64_DynEx struct is extending the Elf64_Dyn for those which contains a string    */
 typedef struct
 {
@@ -73,12 +75,6 @@ typedef struct
 
 
 
-/*  Return NULL for failing malloc  */
-#define malloc_rnull(size) \
-malloc((size)); \
-
-
-
 
 int
 resolve_dependencies64(Elf64_DynEx * dyn_entries[], size_t dyne_size, char is_suid_sgid);
@@ -110,5 +106,5 @@ search_files_in_dirs(char **dirs, size_t dirs_num, NeededStringChart *ndd_chart)
 
 
 
-char *
+size_t
 search_ldcache(NeededStringChart *ndd_chart);

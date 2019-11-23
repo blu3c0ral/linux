@@ -46,6 +46,14 @@ resolve_dependencies64(Elf64_DynEx * dyn_entries[], size_t dyne_size, char is_su
     {
         nleft -= search_files_in_dirs(resolver_data->dt_runpath, resolver_data->rpath_size, resolver_data->ndd_sos);
     }
+
+    /*
+    *   Searching the "/etc/ld.so.cache" file
+    */
+    if (nleft > 0)
+    {
+        nleft -= search_ldcache(resolver_data->ndd_sos));
+    }
 }
 
 
@@ -58,23 +66,13 @@ get_resolver_data(Elf64_DynEx * dyn_entries[], size_t dyne_size, char is_suid_sg
     NeededString **ndd_strs = NULL;
     Resolver_Data *res_data;
 
-    res_data = (Resolver_Data *) malloc(sizeof(Resolver_Data));
-    if (res_data == NULL)
-    {
-        fprintf(stderr,"cannot allocate memory for %s in %s\n", "res_data", "get_resolver_data");
-        return NULL;
-    }
+    MALLOC(res_data, 1);
 
     /*  Initialize res_data */
     res_data->dt_rpath = NULL;
     res_data->dt_runpath = NULL;
 
-    ndd_strs = (NeededString **) malloc(dyne_size * sizeof(NeededString *));
-    if (ndd_strs == NULL)
-    {
-        fprintf(stderr,"cannot allocate memory for %s in %s\n", "ndd_strs[]", "get_resolver_data");
-        return NULL;
-    }
+    MALLOC(ndd_strs, dyne_size);
 
     /*  Switching between the relevant d_tags   */
     for(i = 0; i < dyne_size; ++i)
@@ -83,18 +81,8 @@ get_resolver_data(Elf64_DynEx * dyn_entries[], size_t dyne_size, char is_suid_sg
         {
         case DT_NEEDED:
             str_len = strlen(dyn_entries[i]->string);
-            ndd_strs[res_ind] = (NeededString *) malloc(sizeof(NeededString));
-            if (ndd_strs[res_ind] == NULL)
-            {
-                fprintf(stderr,"cannot reallocate memory for %s in %s\n", "ndd_strs", "get_resolver_data");
-                return NULL;
-            }
-            ndd_strs[res_ind]->ndd_str = (char *) malloc(str_len + 1);
-            if (ndd_strs[res_ind]->ndd_str == NULL)
-            {
-                fprintf(stderr,"cannot reallocate memory for %s in %s\n", "ndd_strs->ndd_str", "get_resolver_data");
-                return NULL;
-            }
+            MALLOC(ndd_strs[res_ind], 1);
+            MALLOC(ndd_strs[res_ind]->ndd_str, str_len + 1);
             memcpy(ndd_strs[res_ind]->ndd_str, dyn_entries[i]->string, str_len + 1);
             ndd_strs[res_ind]->fpath = NULL;
             ++res_ind;
@@ -113,18 +101,8 @@ get_resolver_data(Elf64_DynEx * dyn_entries[], size_t dyne_size, char is_suid_sg
         }
     }
     ++res_ind;
-    ndd_strs = (NeededString **) realloc(ndd_strs, res_ind * sizeof(NeededString *));
-    if (ndd_strs == NULL)
-    {
-        fprintf(stderr,"cannot reallocate memory for %s in %s\n", "ndd_strs", "get_resolver_data");
-        return NULL;
-    }
-    res_data->ndd_sos = (NeededStringChart *) malloc(sizeof(NeededStringChart));
-    if (ndd_strs == NULL)
-    {
-        fprintf(stderr,"cannot allocate memory for %s in %s\n", "ndd_sos", "get_resolver_data");
-        return NULL;
-    }
+    REALLOC(ndd_strs, res_ind);
+    MALLOC(res_data->ndd_sos, 1);
     res_data->ndd_sos->ndd_str_arr = ndd_strs;
     res_data->ndd_sos->nsa_size = res_ind;
 
@@ -322,17 +300,23 @@ file_size(int fd)
 
 
 
-char *
+/*
+    TODO: 
+        * Look for more than one appearance of each library. Handle it by priority, if there's any
+        * Handle the hardware capability directories priority
+*/
+size_t
 search_ldcache(NeededStringChart *ndd_chart)
 {
     int fd;
     int OFLAGS = O_RDONLY;
     char *file_ptr;
-    char *fpath;
+    char *ffpath;
     char *tmp_path;
     long fsize;
     size_t i;
     size_t tmp_len;
+    size_t count = 0;
 
     fd  = open(LDCACHE_FILE, OFLAGS);
 
@@ -352,8 +336,29 @@ search_ldcache(NeededStringChart *ndd_chart)
 
     for(i = 0; i < ndd_chart->nsa_size; ++i)
     {
-        tmp_len = strlen(ndd_chart->ndd_str_arr[i]);
-        tmp_path = (char *) malloc()
-        fpath = (char *) memmem(file_ptr, fsize, tmp_path, tmp_len);
+        if (ndd_chart->ndd_str_arr[i]->fpath == NULL)
+        {
+            /*  We're looking for "/filename.so". In cache it'll save the path but also only the name.    */
+            tmp_len = strlen(ndd_chart->ndd_str_arr[i]->ndd_str + 1);
+            MALLOC(tmp_path, tmp_len+1);
+            strcpy(tmp_path, "/");
+            strcat(tmp_path, ndd_chart->ndd_str_arr[i]->ndd_str);
+            ffpath = (char *) memmem(file_ptr, fsize, tmp_path, tmp_len);
+            FREE(tmp_path);
+
+            if (ffpath != NULL)
+            {
+                /*  There's something there, let's find the all path string */
+                while((*(ffpath-1) != '/0') && (ffpath != file_ptr))
+                {
+                    --ffpath;
+                }
+                MALLOC(ndd_chart->ndd_str_arr[i]->fpath, strlen(ffpath)+1);
+                strcpy(ndd_chart->ndd_str_arr[i]->fpath, ffpath);
+                ++count;
+            }
+        }
     }
+    FREE(file_ptr);
+    return count;
 }
