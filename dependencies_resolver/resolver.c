@@ -14,6 +14,7 @@ int
 resolve_dependencies64(Elf64_DynEx * dyn_entries[], size_t dyne_size, char is_suid_sgid)
 {
     Resolver_Data *resolver_data;
+    char def_libs[2][10] = {"/lib", "/usr/lib"};
     size_t nleft;   /*  How much .so's left to find  */
     size_t i;
 
@@ -53,7 +54,7 @@ resolve_dependencies64(Elf64_DynEx * dyn_entries[], size_t dyne_size, char is_su
     */
     if (nleft > 0)
     {
-        nleft -= search_ldcache(resolver_data->ndd_sos));
+        nleft -= search_ldcache(resolver_data->ndd_sos);
     }
 
     /*
@@ -61,10 +62,10 @@ resolve_dependencies64(Elf64_DynEx * dyn_entries[], size_t dyne_size, char is_su
     */
     if (nleft > 0)
     {
-        nleft -= search_files_in_dirs({"/lib", "/usr/lib"}, 2, resolver_data->ndd_sos);
+        nleft -= search_files_in_dirs(def_libs, 2, resolver_data->ndd_sos);
     }
 
-
+    
 }
 
 

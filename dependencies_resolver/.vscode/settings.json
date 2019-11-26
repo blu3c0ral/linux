@@ -1,5 +1,6 @@
 {
     "files.associations": {
-        "resolver.h": "c"
+        "resolver.h": "c",
+        "cstdlib": "cpp"
     }
 }
