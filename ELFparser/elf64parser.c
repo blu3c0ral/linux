@@ -104,4 +104,7 @@ Elf64_DynExArr *ldd_data(char *f_path)
         elf64_dynexarr->elf64_dynex[i].elf64_dyn.d_tag = elf64_dyn[i].d_tag;
         elf64_dynexarr->elf64_dynex[i].elf64_dyn.d_un.d_val = elf64_dyn[i].d_un.d_val;  /* sizeof(Elf64_Xword) == sizeof(Elf64_Addr) */
     }
+
+
+
 }
