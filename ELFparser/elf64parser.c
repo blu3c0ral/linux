@@ -1,11 +1,13 @@
 #include "elf64parser.h"
 
+#include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 
 #include <elf.h>
 
 #include "elfutils.h"
-#include "memory.h"
+#include "../memory.h"
 
 uint8_t 
 parse_elf64(char *fptr) 
@@ -44,7 +46,9 @@ Elf64_DynExArr *ldd_data(char *f_path)
     Elf64_Off strtbl;
     Elf64_Off dynsec;
     Elf64_Dyn *elf64_dyn;
+    Elf64_DynExArr *elf64_dynexarr;
     uint64_t i;
+    size_t dyn_size;
     size_t dyncount;
     size_t dyncap;
 
@@ -63,11 +67,14 @@ Elf64_DynExArr *ldd_data(char *f_path)
         }
     }
 
-    /* Continue from here */
-    MALLOC(elf64_dyn, 1);
-    dyncap = 1;
+
+    /* Obtaining the dyn's structs */
+    dyncap = 10;
+    MALLOC(elf64_dyn, dyncap);
+    dyn_size = sizeof(elf64_dyn);
     do
     {
+        memcpy(elf64_dyn + dyncount, fptr + dynsec + dyncount * dyn_size, dyn_size);
         ++dyncount;
         if(dyncount == dyncap)
         {
@@ -76,4 +83,25 @@ Elf64_DynExArr *ldd_data(char *f_path)
         }
     } while (elf64_dyn[dyncount - 1].d_tag != DT_NULL);
     
+
+    /* Find the string table */
+    for (i = 0; i < dyncount; ++i)
+    {
+        if (elf64_dyn[i].d_tag == DT_STRTAB)
+        {
+            strtbl = (Elf64_Addr) elf64_dyn[i].d_un.d_ptr;      /* I'm not sure that Addr ?= Off */
+            break;
+        }
+    }
+
+
+    /* Allocate and fill the Elf64_DynExArr array */
+    MALLOC(elf64_dynexarr, 1);
+    MALLOC((*elf64_dynexarr).elf64_dynex, dyncount);
+    elf64_dynexarr->size = dyncount;
+    for(i = 0; i < dyncount; ++i)
+    {
+        elf64_dynexarr->elf64_dynex[i].elf64_dyn.d_tag = elf64_dyn[i].d_tag;
+        elf64_dynexarr->elf64_dynex[i].elf64_dyn.d_un.d_val = elf64_dyn[i].d_un.d_val;  /* sizeof(Elf64_Xword) == sizeof(Elf64_Addr) */
+    }
 }

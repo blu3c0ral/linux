@@ -1,20 +1,22 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include <elf.h>
+
 
 
 /*  Elf64_DynEx struct is extending the Elf64_Dyn for those which contains a string    */
 typedef struct
 {
-    Elf64_Dyn * elf64_dyn;
-    char *      string;
+    Elf64_Dyn elf64_dyn;
+    char *string;
 } Elf64_DynEx;
 
 
 
 typedef struct 
 {
-    Elf64_DynEx * elf64_dynex;
+    Elf64_DynEx *elf64_dynex;
     size_t size;
 } Elf64_DynExArr;
 
