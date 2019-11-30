@@ -8,9 +8,10 @@
 
 #include "elfutils.h"
 #include "../memory.h"
+#include "../fileutils.h"
+#include "../utils.h"
 
-uint8_t 
-parse_elf64(char *fptr) 
+uint8_t parse_elf64(File_Ptr *fptr) 
 {
     Elf64_Ehdr * elf64_ehdr;
 
@@ -19,18 +20,25 @@ parse_elf64(char *fptr)
 
 
 
-Elf64_Shdr *get_elf64_shdr(char *file_ptr, Elf64_Ehdr *elf64_ehdr)
+Elf64_Shdr *get_elf64_shdr(File_Ptr *f_ptr, Elf64_Ehdr *elf64_ehdr)
 {
     Elf64_Shdr * shdrs_arr;
-    char *shdrs;
-    Elf64_Off offset; 
+    Elf64_Off offset;
+    size_t b_read;
     uint64_t i;
 
     MALLOC(shdrs_arr, elf64_ehdr->e_shnum);
     for(i=0; i<elf64_ehdr->e_shnum; ++i)
     {
         offset = i * elf64_ehdr->e_shentsize;
-        memcpy((char *)shdrs_arr + offset, file_ptr + elf64_ehdr->e_shoff + offset, elf64_ehdr->e_shentsize);
+        b_read = f_read((char *)shdrs_arr + offset, f_ptr, elf64_ehdr->e_shoff + offset, elf64_ehdr->e_shentsize);
+
+        if (b_read < elf64_ehdr->e_shentsize)
+        {
+            error_msg("error - can't get the Shdr's");
+            FREE(shdrs_arr);
+            return NULL;
+        }
     }
 
     return shdrs_arr;

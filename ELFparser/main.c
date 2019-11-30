@@ -1,31 +1,26 @@
 #include <stdio.h>
-#include <stdlib.h>
-
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <sys/mman.h>
 
 #include "elfutils.h"
 #include "elf64parser.h"
+
 #include "../memory.h"
+#include "../fileutils.h"
 
 #include <elf.h>
 
 int _main(int argc, char **argv) 
 {
-    char *file_ptr;
+    File_Ptr *f_ptr;
 
-    file_ptr = get_file_ptr(argv[1]);
+    f_ptr = f_open(argv[1]);
 
-    switch (get_elf_class(file_ptr))
+    switch (get_elf_class(f_ptr))
     {
         case ELFCLASS32:
             break;
         
         case ELFCLASS64:
-            parse_elf64(file_ptr);
+            parse_elf64(f_ptr);
             break;
         
         default:

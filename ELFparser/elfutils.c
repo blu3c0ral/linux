@@ -1,5 +1,4 @@
-#include "utils.h"
-#include "elfutils.h"
+#include <elf.h>
 
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -8,57 +7,82 @@
 #include <stdio.h>
 #include <sys/mman.h>
 
-#include <elf.h>
+#include "elfutils.h"
 
-int8_t 
-get_elf_class(char *file_ptr) 
+#include "../memory.h"
+#include "../fileutils.h"
+#include "../utils.h"
+
+
+
+int8_t get_elf_class(File_Ptr *f_ptr) 
 {
+    char *elfmag;
+    size_t b_read;
+    size_t to_read;
+    int8_t ret_val;
+
+    to_read = EI_CLASS + 1;
+
+    MALLOC(elfmag, to_read);
+    b_read = f_read(elfmag, f_ptr, 0, to_read);
+
+    if (b_read < to_read)
+    {
+        return -1;
+    }
+
     for (size_t i = 0; i < 4; ++i)
     {
-        if (file_ptr[i] != ELFMAG[i])
+        if (elfmag[i] != ELFMAG[i])
         {
             return -1;
         }
     }
-    return file_ptr[EI_CLASS];
+
+    ret_val = elfmag[to_read - 1];
+    FREE(elfmag);
+    return ret_val;
 }
 
-Elf64_Ehdr *
-get_Ehdr64(char *file_ptr) 
+
+Elf64_Ehdr *get_Ehdr64(File_Ptr *f_ptr)
 {
-    return (Elf64_Ehdr *)file_ptr;
+    Elf64_Ehdr *elf64_ehdr;
+    size_t b_read;
+    size_t eh_size;
+
+    eh_size = sizeof(Elf64_Ehdr);
+    MALLOC(elf64_ehdr, 1);
+    b_read = f_read(elf64_ehdr, f_ptr, 0, eh_size);
+
+    if (b_read < eh_size)
+    {
+        error_msg("error - can't get Ehdr64 from file");
+        FREE(elf64_ehdr);
+        return NULL;
+    }
+
+    return elf64_ehdr;
 }
 
-Elf32_Ehdr * 
-get_Ehdr32(char *file_ptr) 
+
+Elf32_Ehdr *get_Ehdr32(File_Ptr *f_ptr)
 {
-    return (Elf32_Ehdr *)file_ptr;
-}
+    Elf32_Ehdr *elf32_ehdr;
+    size_t b_read;
+    size_t eh_size;
 
-char *get_file_ptr(const char *fpath)
-{
-    int fd;
-    int OFLAGS = O_RDONLY;
-    char *file_ptr;
-    long fsize;
+    eh_size = sizeof(Elf32_Ehdr);
+    MALLOC(elf32_ehdr, 1);
+    b_read = f_read(elf32_ehdr, f_ptr, 0, eh_size);
 
-    fd  = open(fpath, OFLAGS);
-
-    fsize = file_size(fd);
-    if (fsize == -1) 
+    if (b_read < eh_size)
     {
-        error_exit("ERROR: file size couldn't retrieved");
-    }
-    else if (fsize < sizeof(Elf64_Ehdr))
-    {
-        error_exit("ERROR: file is not an ELF file");
+        error_msg("error - can't get Ehdr32 from file");
+        FREE(elf32_ehdr);
+        return NULL;
     }
 
-    file_ptr = (char *)mmap(NULL, fsize, PROT_READ, MAP_PRIVATE, fd, 0);
-    if (file_ptr == NULL) 
-    {
-        error_exit("ERROR: file couldn't be mapped to memory");
-    }
-
-    return file_ptr;
+    return elf32_ehdr;
 }

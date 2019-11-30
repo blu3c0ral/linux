@@ -1,6 +1,6 @@
 #include <stdint.h>
 
-typedef uint64_t FP_Off
+typedef uint64_t FP_Off;
 
 typedef struct 
 {
@@ -13,6 +13,6 @@ typedef struct
 
 File_Ptr *f_open(const char *f_path);
 
-char *f_read(File_Ptr *f_ptr, FP_Off f_off, size_t r_size);
+size_t f_read(char *dst, File_Ptr *f_ptr, FP_Off f_off, size_t r_size);
 
 
