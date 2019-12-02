@@ -48,7 +48,7 @@ Elf64_Shdr *get_elf64_shdr(File_Ptr *f_ptr, Elf64_Ehdr *elf64_ehdr)
 
 Elf64_DynExArr *ldd_data(char *f_path)
 {
-    char *fptr;
+    File_Ptr *f_ptr;
     Elf64_Ehdr *elf64_ehdr;
     Elf64_Shdr *elf64_shdr;
     Elf64_Off strtbl;
@@ -59,13 +59,15 @@ Elf64_DynExArr *ldd_data(char *f_path)
     size_t dyn_size;
     size_t dyncount;
     size_t dyncap;
+    size_t b_read;
 
 
-    fptr = get_file_ptr(f_path);
-    elf64_ehdr = get_Ehdr64(fptr);
-    elf64_shdr = get_elf64_shdr(fptr, elf64_ehdr);
+    f_ptr = f_open(f_path);
+    elf64_ehdr = get_Ehdr64(f_ptr);
+    elf64_shdr = get_elf64_shdr(f_ptr, elf64_ehdr);
 
-    /* Find string table and dynamic section */
+
+    /* Find dynamic section */
     for(i = 0; i < elf64_ehdr->e_shnum; ++i)
     {
         if (elf64_shdr[i].sh_type == SHT_DYNAMIC)
@@ -77,12 +79,13 @@ Elf64_DynExArr *ldd_data(char *f_path)
 
 
     /* Obtaining the dyn's structs */
+    dyncount = 0;
     dyncap = 10;
     MALLOC(elf64_dyn, dyncap);
     dyn_size = sizeof(elf64_dyn);
     do
     {
-        memcpy(elf64_dyn + dyncount, fptr + dynsec + dyncount * dyn_size, dyn_size);
+        b_read = f_read(elf64_dyn + dyncount, f_ptr, dynsec + dyncount, dyn_size);
         ++dyncount;
         if(dyncount == dyncap)
         {
@@ -90,7 +93,11 @@ Elf64_DynExArr *ldd_data(char *f_path)
             REALLOC(elf64_dyn, dyncap);
         }
     } while (elf64_dyn[dyncount - 1].d_tag != DT_NULL);
-    
+    if (dyncount != dyncap)
+    {
+        REALLOC(elf64_dyn, dyncount);
+    }
+
 
     /* Find the string table */
     for (i = 0; i < dyncount; ++i)
@@ -105,7 +112,7 @@ Elf64_DynExArr *ldd_data(char *f_path)
 
     /* Allocate and fill the Elf64_DynExArr array */
     MALLOC(elf64_dynexarr, 1);
-    MALLOC((*elf64_dynexarr).elf64_dynex, dyncount);
+    MALLOC(elf64_dynexarr->elf64_dynex, dyncount);
     elf64_dynexarr->size = dyncount;
     for(i = 0; i < dyncount; ++i)
     {

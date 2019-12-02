@@ -58,6 +58,12 @@ size_t f_read(char *dst, File_Ptr *f_ptr, FP_Off f_off, size_t r_size)
     size_t c_read;
     uint64_t i;
 
+        if (f_off > f_ptr->_f_size)
+    {
+        error_msg("error - offset is not within the file\n");
+        return 0;
+    }
+
     if (r_size <= f_ptr->_f_size - f_off)
     {
         c_read = r_size;
@@ -74,4 +80,33 @@ size_t f_read(char *dst, File_Ptr *f_ptr, FP_Off f_off, size_t r_size)
     }
 
     return c_read;
+}
+
+
+char *f_str_read(File_Ptr *f_ptr, FP_Off f_off)
+{
+    char *str;
+    size_t bytes_count;
+    size_t bytes_cap;
+
+
+    if (f_off > f_ptr->_f_size)
+    {
+        error_msg("error - offset is not within the file\n");
+        return NULL;
+    }
+
+    MALLOC(str, 15);
+    bytes_count = 0;
+    while ((str[bytes_count] != '\0') && (f_off + bytes_count <= f_ptr->_f_size))
+    {
+        str[bytes_count] = f_ptr->_f_ptr[f_off + bytes_count];
+        ++bytes_count;
+        if (bytes_count == bytes_cap)
+        {
+            REALLOC(str, bytes_cap * 2);
+        }
+    }
+    REALLOC(str, bytes_count);
+    return str;    
 }
