@@ -118,8 +118,18 @@ Elf64_DynExArr *ldd_data(char *f_path)
     {
         elf64_dynexarr->elf64_dynex[i].elf64_dyn.d_tag = elf64_dyn[i].d_tag;
         elf64_dynexarr->elf64_dynex[i].elf64_dyn.d_un.d_val = elf64_dyn[i].d_un.d_val;  /* sizeof(Elf64_Xword) == sizeof(Elf64_Addr) */
+
+        /* Let's get the relevant data right now */
+        switch (elf64_dyn[i].d_tag)
+        {
+        case DT_NEEDED:
+        case DT_SONAME:
+            elf64_dynexarr->elf64_dynex[i].string = f_str_read(f_ptr, strtbl + elf64_dyn[i].d_un.d_val);
+            break;
+        
+        default:
+            break;
+        }
     }
-
-
 
 }
