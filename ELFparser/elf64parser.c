@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include <elf.h>
 
@@ -55,6 +57,7 @@ Elf64_DynExArr *ldd_data(char *f_path)
     Elf64_Off dynsec;
     Elf64_Dyn *elf64_dyn;
     Elf64_DynExArr *elf64_dynexarr;
+    struct stat f_stat;
     uint64_t i;
     size_t dyn_size;
     size_t dyncount;
@@ -124,12 +127,34 @@ Elf64_DynExArr *ldd_data(char *f_path)
         {
         case DT_NEEDED:
         case DT_SONAME:
+        case DT_RPATH:
+        case DT_RUNPATH:
             elf64_dynexarr->elf64_dynex[i].string = f_str_read(f_ptr, strtbl + elf64_dyn[i].d_un.d_val);
             break;
-        
         default:
             break;
         }
     }
+
+
+    /* Now let's get the suid/guid situation */
+    if (stat(f_path, &f_stat) == -1) 
+    {
+        error_msg("error - cannot retrieve the suid/guid status");
+    }
+    else
+    {
+        if (f_stat.st_mode && (S_ISUID || S_ISGID)) 
+        {
+            elf64_dynexarr->isID = 1;
+        } 
+        else
+        {
+            elf64_dynexarr->isID = 0;
+        }
+        
+    }
+    
+
 
 }

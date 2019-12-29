@@ -17,6 +17,7 @@ typedef struct
 typedef struct 
 {
     Elf64_DynEx *elf64_dynex;
+    char isID;
     size_t size;
 } Elf64_DynExArr;
 
