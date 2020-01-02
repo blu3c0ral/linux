@@ -11,7 +11,7 @@
 #include "resolver.h"
 
 int
-resolve_dependencies64(Elf64_DynEx * dyn_entries[], size_t dyne_size, char is_suid_sgid)
+resolve_dependencies64(Elf64_DynEx * dyn_entries[], size_t dyne_size, char is_suid_sgid, char *dirRoot)
 {
     Resolver_Data *resolver_data;
     char def_libs[2][10] = {"/lib", "/usr/lib"};

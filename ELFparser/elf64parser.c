@@ -154,7 +154,4 @@ Elf64_DynExArr *ldd_data(char *f_path)
         }
         
     }
-    
-
-
 }
